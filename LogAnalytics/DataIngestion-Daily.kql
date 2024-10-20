@@ -1,0 +1,20 @@
+let SelectDateTimeFrom = startofday(now(-30d));
+let SelectDateTimeTo = endofday(now());
+let DaysToDisplay = range IntervalBorder from SelectDateTimeFrom to SelectDateTimeTo step 1d
+    | project TimeToDisplay = bin(IntervalBorder, 1d);
+let UsageMaterialized = materialize(
+    Usage 
+    | where IsBillable 
+    | where TimeGenerated between (startofday(SelectDateTimeFrom) .. endofday(SelectDateTimeTo))
+    | extend TimeToDisplay = bin(TimeGenerated, 1d)
+    | summarize IngestedGB = sum(Quantity) / 1000 by TimeToDisplay
+);
+DaysToDisplay
+| join kind = leftouter (UsageMaterialized)
+    on TimeToDisplay
+| sort by TimeToDisplay asc
+| summarize _ingestedGB = sum(IngestedGB) by TimeToDisplay
+| order by TimeToDisplay desc 
+| project 
+    ["Processing Date"] = format_datetime(TimeToDisplay,'MM-dd-yyyy'),
+    _ingestedGB
